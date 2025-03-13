@@ -29,11 +29,11 @@ def detect_players(image_path, model_path, conf_threshold=0.5):
     
     # Guardar imagen con detecciones (sin mostrar ventanas)
     cv2.imwrite("result.jpg", frame)
-    print("Detección completada. Imagen guardada como 'resultado.jpg'")
+    print("Detección completada. Imagen guardada como 'result.jpg'")
 
 # Uso del código
 detect_players(
     image_path="test.jpg",  # Ruta de tu imagen de prueba
-    model_path="/home/pablo/MLFootball/trained_model.pt",         # Ruta de tu modelo entrenado
+    model_path="./models/trained_model.pt",         # Ruta de tu modelo entrenado
     conf_threshold=0.5            # Umbral de confianza
 )

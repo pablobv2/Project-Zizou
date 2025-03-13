@@ -1,17 +1,19 @@
+import shutil
+import os
 from huggingface_hub import hf_hub_download
 
-# Configura estos parámetros
-repo_id = "pablobv2/MLFootball"  # Reemplaza con tu usuario y nombre del repositorio
-filename = "trained_model.pt"  # Nombre del archivo .pt que deseas descargar
-local_dir = "./modelo_descargado"  # Directorio local para guardar el archivo
-# token = "tu_token_hf"  # Opcional, solo si el modelo es privado
+repo_id = "pablobv2/MLFootball"
+filename = "trained_model.pt"
+local_dir = "./models"
 
-# Descargar el archivo .pt
-file_path = hf_hub_download(
-    repo_id=repo_id,
-    filename=filename,
-    cache_dir=local_dir,
-#    token=token,
-)
+# Descarga en la caché (puedes especificar cache_dir=local_dir, pero aún así se mantendrá la estructura de caché interna)
+file_path = hf_hub_download(repo_id=repo_id, filename=filename)
 
-print(f"Modelo descargado en: {file_path}")
+# Asegurar que el directorio destino exista
+os.makedirs(local_dir, exist_ok=True)
+
+# Copiar el archivo a la ubicación deseada
+destination_path = os.path.join(local_dir, filename)
+shutil.copy(file_path, destination_path)
+
+print(f"Modelo copiado a: {destination_path}")
