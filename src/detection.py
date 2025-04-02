@@ -1,82 +1,102 @@
 import cv2
 import numpy as np
-# No es necesario importar YOLO aquí si el modelo se pasa como argumento
+from src.utils import get_dominant_color, assign_team_by_hsv_color, TEAM_BOX_COLORS, get_id_color
 
-# Opcional: Generar colores únicos para cada ID (si quieres diferenciar visualmente)
-# Puedes usar una librería como matplotlib o crear una función simple
-rng = np.random.default_rng(3) # Seed for reproducibility
-colors = rng.uniform(0, 255, size=(100, 3)) # Pre-generate 100 random colors
-
-def get_color(track_id):
-    """Devuelve un color consistente para un ID de seguimiento dado."""
-    idx = int(track_id) % len(colors)
-    return tuple(map(int, colors[idx]))
-
-def track_objects_on_frame(frame, model, conf_threshold=0.5, classes_to_track=None):
+def track_objects_on_frame(frame, model, track_team_mapping, conf_threshold=0.5, classes_to_track=None):
     """
-    Realiza la detección y seguimiento de objetos en un único frame de vídeo
-    utilizando el tracker especificado (ej. ByteTrack).
+    Detecta, sigue y asigna equipos a objetos en un frame, dibujando boxes coloreadas.
 
     Args:
         frame (np.ndarray): El frame de vídeo (imagen NumPy).
         model (YOLO): El modelo YOLO cargado.
-        conf_threshold (float): Umbral de confianza para las detecciones iniciales.
-        classes_to_track (list, optional): Lista de IDs de clase a seguir
-                                           (ej. [0] para seguir solo la clase 0).
-                                           Si es None, sigue todas las clases.
+        track_team_mapping (dict): Diccionario para almacenar la asignación equipo-ID.
+                                   {track_id: team_label}. Se actualiza en esta función.
+        conf_threshold (float): Umbral de confianza.
+        classes_to_track (list, optional): IDs de clase a seguir.
 
     Returns:
         tuple: Una tupla conteniendo:
-            - np.ndarray: El frame con las detecciones y IDs de seguimiento dibujados.
-            - list: Lista de resultados de tracking crudos de YOLO para este frame.
+            - np.ndarray: El frame procesado.
+            - list: Resultados crudos de YOLO para este frame.
+            - dict: El diccionario track_team_mapping actualizado.
     """
-    # Realizar detección y seguimiento
-    # persist=True es ESENCIAL para que el tracker recuerde objetos entre frames
-    # tracker='bytetrack.yaml' especifica el algoritmo de tracking
     results = model.track(
         frame,
         persist=True,
-        tracker="bytetrack.yaml", # o botsort.yaml
+        tracker="bytetrack.yaml",
         conf=conf_threshold,
-        classes=classes_to_track, # Filtra clases si se especifica
-        verbose=False # Reduce la salida en consola durante el procesamiento
-        )
+        classes=classes_to_track,
+        verbose=False
+    )
 
     processed_frame = frame.copy()
+    current_frame_results = results[0] # Resultados para este frame
 
-    # Verificar si hay detecciones y IDs de seguimiento
-    if results[0].boxes is not None and results[0].boxes.id is not None:
-        boxes = results[0].boxes.xyxy.cpu().numpy()
-        confidences = results[0].boxes.conf.cpu().numpy()
-        class_ids = results[0].boxes.cls.cpu().numpy().astype(int)
-        track_ids = results[0].boxes.id.int().cpu().numpy() # Obtener los IDs de seguimiento
+    if current_frame_results.boxes is not None and current_frame_results.boxes.id is not None:
+        boxes = current_frame_results.boxes.xyxy.cpu().numpy()
+        confidences = current_frame_results.boxes.conf.cpu().numpy()
+        class_ids = current_frame_results.boxes.cls.cpu().numpy().astype(int)
+        track_ids = current_frame_results.boxes.id.int().cpu().numpy()
 
-        # Dibujar las bounding boxes y los IDs de seguimiento
         for box, conf, cls_id, track_id in zip(boxes, confidences, class_ids, track_ids):
             x1, y1, x2, y2 = map(int, box)
 
-            # Obtener color para el ID (opcional, puedes usar un color fijo)
-            track_color = get_color(track_id)
-            # track_color = (0, 255, 0) # O usar siempre verde
+            team_label = "Unknown"
+            # 1. Comprobar si ya conocemos el equipo de este ID
+            if track_id in track_team_mapping:
+                team_label = track_team_mapping[track_id]
+            else:
+                # 2. Si es nuevo, intentar determinar el equipo por color
+                # Definir la ROI de la camiseta (ajusta estos porcentajes según veas)
+                roi_h = y2 - y1
+                roi_w = x2 - x1
+                # Tomar una ROI central superior (evitar cabeza y piernas)
+                roi_y1 = y1 + int(roi_h * 0.15) # Empezar un poco abajo del borde superior
+                roi_y2 = y1 + int(roi_h * 0.60) # Terminar antes de la mitad inferior
+                roi_x1 = x1 + int(roi_w * 0.25) # Margen lateral
+                roi_x2 = x2 - int(roi_w * 0.25) # Margen lateral
 
-            # Validar que el ID de clase existe en los nombres del modelo
+                # Asegurarse de que la ROI es válida
+                roi_y1, roi_y2 = max(0, roi_y1), min(frame.shape[0], roi_y2)
+                roi_x1, roi_x2 = max(0, roi_x1), min(frame.shape[1], roi_x2)
+
+                if roi_y2 > roi_y1 and roi_x2 > roi_x1:
+                    jersey_roi = frame[roi_y1:roi_y2, roi_x1:roi_x2]
+
+                    # Obtener color dominante y asignar equipo
+                    dominant_bgr = get_dominant_color(jersey_roi)
+                    if dominant_bgr:
+                        team_label = assign_team_by_hsv_color(dominant_bgr)
+                        # Guardar la asignación para futuras tramas
+                        track_team_mapping[track_id] = team_label
+                        # Opcional: Dibujar la ROI para depuración
+                        # cv2.rectangle(processed_frame, (roi_x1, roi_y1), (roi_x2, roi_y2), (255, 255, 0), 1)
+                else:
+                     # Si la ROI no es válida, no podemos determinar color
+                     track_team_mapping[track_id] = "Unknown" # Marcar como desconocido por ahora
+
+
+            # 3. Obtener el color de la bounding box según el equipo asignado
+            box_color = TEAM_BOX_COLORS.get(team_label, TEAM_BOX_COLORS["Unknown"])
+            # Alternativa: Si quieres un color único por ID *además* del equipo:
+            # id_color = get_id_color(track_id) # Podrías usarlo para el texto o un borde interior
+
+            # 4. Dibujar
             if cls_id < len(model.names):
                 class_name = model.names[cls_id]
-                label = f"ID {track_id}: {class_name} {conf:.2f}"
+                # Incluir etiqueta de equipo en el texto
+                label = f"ID {track_id} ({team_label}): {class_name} {conf:.2f}"
 
-                # Dibujar rectángulo
-                cv2.rectangle(processed_frame, (x1, y1), (x2, y2), track_color, 2)
+                # Dibujar rectángulo con el color del equipo
+                cv2.rectangle(processed_frame, (x1, y1), (x2, y2), box_color, 2)
 
-                # Calcular tamaño del texto para el fondo
-                (text_width, text_height), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
-                # Dibujar un rectángulo de fondo para el texto
-                cv2.rectangle(processed_frame, (x1, y1 - text_height - baseline), (x1 + text_width, y1), track_color, -1)
-                # Dibujar texto (blanco sobre fondo de color)
-                cv2.putText(processed_frame, label, (x1, y1 - baseline),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+                # Texto con fondo
+                (text_width, text_height), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                cv2.rectangle(processed_frame, (x1, y1 - text_height - baseline), (x1 + text_width, y1), box_color, -1)
+                cv2.putText(processed_frame, label, (x1, y1 - baseline + 1),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1) # Texto blanco
 
             else:
-                print(f"Advertencia: ID de clase {cls_id} fuera de rango para model.names")
+                print(f"Advertencia: ID de clase {cls_id} fuera de rango")
 
-    # results[0] contiene la información del primer (y único en este caso) frame procesado
-    return processed_frame, results[0]
+    return processed_frame, current_frame_results, track_team_mapping
