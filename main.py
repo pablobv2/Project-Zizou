@@ -1,39 +1,48 @@
-import cv2
-from ultralytics import YOLO
+import argparse
+import os
+from src.video_processor import process_video
 
-def detect_players(image_path, model_path, conf_threshold=0.5):
-    # Cargar el modelo personalizado
-    model = YOLO(model_path)
-    
-    # Cargar la imagen
-    frame = cv2.imread(image_path)
-    
-    # Realizar la detección
-    results = model(frame, conf=conf_threshold)
-    
-    # Procesar los resultados
-    for result in results:
-        boxes = result.boxes.xyxy.cpu().numpy()
-        confidences = result.boxes.conf.cpu().numpy()
-        class_ids = result.boxes.cls.cpu().numpy().astype(int)
-        
-        # Dibujar las bounding boxes
-        for box, conf, cls_id in zip(boxes, confidences, class_ids):
-            x1, y1, x2, y2 = map(int, box)
-            
-            # Dibujar rectángulo y texto
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            label = f"{model.names[cls_id]} {conf:.2f}"
-            cv2.putText(frame, label, (x1, y1-10),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,0), 2)
-    
-    # Guardar imagen con detecciones (sin mostrar ventanas)
-    cv2.imwrite("result.jpg", frame)
-    print("Detección completada. Imagen guardada como 'result.jpg'")
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Detecta jugadores en un vídeo usando YOLO.")
+    parser.add_argument(
+        "--input",
+        type=str,
+        required=True,
+        help="Ruta al vídeo de entrada (.mp4, .avi, etc.)."
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        required=True,
+        help="Ruta para guardar el vídeo procesado (.mp4)."
+    )
+    parser.add_argument(
+        "--model",
+        type=str,
+        required=True,
+        help="Ruta al archivo del modelo YOLO entrenado (.pt)."
+    )
+    parser.add_argument(
+        "--conf",
+        type=float,
+        default=0.5,
+        help="Umbral de confianza para la detección (ej: 0.5)."
+    )
 
-# Uso del código
-detect_players(
-    image_path="test.jpg",  # Ruta de tu imagen de prueba
-    model_path="./models/trained_model.pt",         # Ruta de tu modelo entrenado
-    conf_threshold=0.5            # Umbral de confianza
-)
+    args = parser.parse_args()
+
+    # Validar existencia de archivos de entrada
+    if not os.path.exists(args.input):
+        print(f"Error: El archivo de vídeo de entrada no existe: {args.input}")
+        exit(1)
+    if not os.path.exists(args.model):
+        print(f"Error: El archivo del modelo no existe: {args.model}")
+        exit(1)
+
+    # Ejecutar el procesamiento del vídeo
+    process_video(
+        input_video_path=args.input,
+        output_video_path=args.output,
+        model_path=args.model,
+        conf_threshold=args.conf
+    )
