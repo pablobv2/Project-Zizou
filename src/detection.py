@@ -1,82 +1,161 @@
 import cv2
 import numpy as np
-# No es necesario importar YOLO aquí si el modelo se pasa como argumento
 
-# Opcional: Generar colores únicos para cada ID (si quieres diferenciar visualmente)
-# Puedes usar una librería como matplotlib o crear una función simple
-rng = np.random.default_rng(3) # Seed for reproducibility
-colors = rng.uniform(0, 255, size=(100, 3)) # Pre-generate 100 random colors
+# Global dictionary para almacenar el filtro de Kalman de cada track
+TRACK_KALMAN = {}
+
+# --- Color Generation (Consistente - basado en track_id) ---
+_rng = np.random.default_rng(42)
+_colors = _rng.uniform(0, 255, size=(100, 3))
 
 def get_color(track_id):
-    """Devuelve un color consistente para un ID de seguimiento dado."""
-    idx = int(track_id) % len(colors)
-    return tuple(map(int, colors[idx]))
+    idx = int(track_id) % len(_colors)
+    return tuple(map(int, _colors[idx]))
 
-def track_objects_on_frame(frame, model, conf_threshold=0.5, classes_to_track=None):
+def create_kalman_filter(initial_measurement):
     """
-    Realiza la detección y seguimiento de objetos en un único frame de vídeo
-    utilizando el tracker especificado (ej. ByteTrack).
+    Crea e inicializa un filtro de Kalman para rastrear la posición (x, y) con un modelo de velocidad constante.
+    initial_measurement debe ser un np.array de forma [[x], [y]].
+    """
+    kalman = cv2.KalmanFilter(4, 2)
+    # Matriz de transición del estado (modelo de velocidad constante)
+    kalman.transitionMatrix = np.array([[1, 0, 1, 0],
+                                        [0, 1, 0, 1],
+                                        [0, 0, 1, 0],
+                                        [0, 0, 0, 1]], dtype=np.float32)
+    # Matriz de medición
+    kalman.measurementMatrix = np.array([[1, 0, 0, 0],
+                                         [0, 1, 0, 0]], dtype=np.float32)
+    kalman.processNoiseCov = np.eye(4, dtype=np.float32) * 0.03
+    kalman.measurementNoiseCov = np.eye(2, dtype=np.float32) * 0.5
+    kalman.errorCovPost = np.eye(4, dtype=np.float32)
+    kalman.statePost = np.array([[initial_measurement[0, 0]],
+                                 [initial_measurement[1, 0]],
+                                 [0],
+                                 [0]], dtype=np.float32)
+    return kalman
 
+def track_objects_on_frame(frame, model, conf_threshold=0.5, classes_to_track=None, history_len=10):
+    """
+    Realiza detección y seguimiento con estabilización mediante un filtro de Kalman.
+    Si en un frame no se detecta un objeto, se utiliza la predicción del filtro para dibujar la posición suavizada.
+    
     Args:
-        frame (np.ndarray): El frame de vídeo (imagen NumPy).
+        frame (np.ndarray): El frame del vídeo.
         model (YOLO): El modelo YOLO cargado.
-        conf_threshold (float): Umbral de confianza para las detecciones iniciales.
-        classes_to_track (list, optional): Lista de IDs de clase a seguir
-                                           (ej. [0] para seguir solo la clase 0).
-                                           Si es None, sigue todas las clases.
-
+        conf_threshold (float): Umbral de confianza para detecciones.
+        classes_to_track (list, optional): Lista de IDs de clase a seguir.
+        history_len (int): Número máximo de frames perdidos para continuar mostrando la detección.
+    
     Returns:
-        tuple: Una tupla conteniendo:
-            - np.ndarray: El frame con las detecciones y IDs de seguimiento dibujados.
-            - list: Lista de resultados de tracking crudos de YOLO para este frame.
+        tuple: (processed_frame, results)
+            - processed_frame (np.ndarray): Frame con las detecciones dibujadas.
+            - results: Resultados crudos de YOLO para este frame.
     """
-    # Realizar detección y seguimiento
-    # persist=True es ESENCIAL para que el tracker recuerde objetos entre frames
-    # tracker='bytetrack.yaml' especifica el algoritmo de tracking
     results = model.track(
-        frame,
-        persist=True,
-        tracker="bytetrack.yaml", # o botsort.yaml
-        conf=conf_threshold,
-        classes=classes_to_track, # Filtra clases si se especifica
-        verbose=False # Reduce la salida en consola durante el procesamiento
-        )
-
+        frame, persist=True, tracker="botsort.yaml",
+        conf=conf_threshold, classes=classes_to_track, verbose=False
+    )
     processed_frame = frame.copy()
-
-    # Verificar si hay detecciones y IDs de seguimiento
+    current_detected_ids = set()
+    
     if results[0].boxes is not None and results[0].boxes.id is not None:
         boxes = results[0].boxes.xyxy.cpu().numpy()
         confidences = results[0].boxes.conf.cpu().numpy()
-        class_ids = results[0].boxes.cls.cpu().numpy().astype(int)
-        track_ids = results[0].boxes.id.int().cpu().numpy() # Obtener los IDs de seguimiento
+        current_class_ids = results[0].boxes.cls.cpu().numpy().astype(int)  # Clase en este frame
 
-        # Dibujar las bounding boxes y los IDs de seguimiento
-        for box, conf, cls_id, track_id in zip(boxes, confidences, class_ids, track_ids):
+        # Unificar "goalkeeper" y "referee" en "player"
+        if isinstance(model.names, dict):
+            cls_name_to_id = {name: idx for idx, name in model.names.items()}
+        else:
+            cls_name_to_id = {name: idx for idx, name in enumerate(model.names)}
+
+        if "player" in cls_name_to_id:
+            player_id = cls_name_to_id["player"]
+            goalkeeper_id = cls_name_to_id.get("goalkeeper")
+            referee_id = cls_name_to_id.get("referee")
+            current_class_ids = np.array([
+                player_id if cls in (goalkeeper_id, referee_id) else cls
+                for cls in current_class_ids
+            ])
+        
+        track_ids = results[0].boxes.id.int().cpu().numpy()
+
+        for box, conf, cls_id, track_id in zip(boxes, confidences, current_class_ids, track_ids):
             x1, y1, x2, y2 = map(int, box)
-
-            # Obtener color para el ID (opcional, puedes usar un color fijo)
-            track_color = get_color(track_id)
-            # track_color = (0, 255, 0) # O usar siempre verde
-
-            # Validar que el ID de clase existe en los nombres del modelo
-            if cls_id < len(model.names):
-                class_name = model.names[cls_id]
-                label = f"ID {track_id}: {class_name} {conf:.2f}"
-
-                # Dibujar rectángulo
-                cv2.rectangle(processed_frame, (x1, y1), (x2, y2), track_color, 2)
-
-                # Calcular tamaño del texto para el fondo
-                (text_width, text_height), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
-                # Dibujar un rectángulo de fondo para el texto
-                cv2.rectangle(processed_frame, (x1, y1 - text_height - baseline), (x1 + text_width, y1), track_color, -1)
-                # Dibujar texto (blanco sobre fondo de color)
-                cv2.putText(processed_frame, label, (x1, y1 - baseline),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-
+            # Usar la parte inferior central del bounding box como medición
+            x_center = int((x1 + x2) / 2)
+            y_bottom = int(y2)
+            measurement = np.array([[np.float32(x_center)], [np.float32(y_bottom)]])
+            
+            # Inicializar o actualizar el filtro de Kalman para este track
+            if track_id not in TRACK_KALMAN:
+                kalman = create_kalman_filter(measurement)
+                TRACK_KALMAN[track_id] = {
+                    "kalman": kalman,
+                    "missed": 0,
+                    "bbox": (x1, y1, x2, y2),
+                    "class": cls_id
+                }
             else:
-                print(f"Advertencia: ID de clase {cls_id} fuera de rango para model.names")
-
-    # results[0] contiene la información del primer (y único en este caso) frame procesado
+                kalman = TRACK_KALMAN[track_id]["kalman"]
+                kalman.correct(measurement)  # Actualización con la medición
+                TRACK_KALMAN[track_id]["missed"] = 0
+                TRACK_KALMAN[track_id]["bbox"] = (x1, y1, x2, y2)
+                TRACK_KALMAN[track_id]["class"] = cls_id
+            
+            # Predicción del filtro
+            predicted = kalman.predict()
+            pred_x, pred_y = int(predicted[0]), int(predicted[1])
+            current_detected_ids.add(track_id)
+            
+            # Calcular dimensiones para la elipse basadas en el ancho del bbox
+            width = x2 - x1
+            ellipse_width = int(width * 0.5)
+            ellipse_height = int(width * 0.15)
+            light_blue = (200, 200, 255)
+            
+            # Dibujar la elipse en la posición predicha
+            cv2.ellipse(
+                processed_frame,
+                center=(pred_x, pred_y),
+                axes=(ellipse_width, ellipse_height),
+                angle=0,
+                startAngle=0,
+                endAngle=360,
+                color=light_blue,
+                thickness=2
+            )
+            
+    # Para los tracks no detectados en el frame actual, se predice su posición
+    tracks_to_remove = []
+    for track_id, info in TRACK_KALMAN.items():
+        if track_id not in current_detected_ids:
+            kalman = info["kalman"]
+            predicted = kalman.predict()
+            pred_x, pred_y = int(predicted[0]), int(predicted[1])
+            info["missed"] += 1
+            if info["missed"] <= history_len:
+                x1, y1, x2, y2 = info["bbox"]
+                width = x2 - x1
+                ellipse_width = int(width * 0.5)
+                ellipse_height = int(width * 0.15)
+                light_blue = (200, 200, 255)
+                cv2.ellipse(
+                    processed_frame,
+                    center=(pred_x, pred_y),
+                    axes=(ellipse_width, ellipse_height),
+                    angle=0,
+                    startAngle=0,
+                    endAngle=360,
+                    color=light_blue,
+                    thickness=2
+                )
+            else:
+                tracks_to_remove.append(track_id)
+    
+    # Eliminar los tracks que han superado el límite de frames sin detección
+    for track_id in tracks_to_remove:
+        del TRACK_KALMAN[track_id]
+    
     return processed_frame, results[0]
