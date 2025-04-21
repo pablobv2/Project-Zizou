@@ -4,7 +4,6 @@ import cv2
 import os
 from ultralytics import YOLO
 from tqdm import tqdm
-# Importar la función actualizada track_objects_on_frame con filtro de Kalman
 from .detection import track_objects_on_frame
 
 def process_video(input_video_path, output_video_path, model_path, conf_threshold=0.5, classes_to_track=None, history_len=10):
