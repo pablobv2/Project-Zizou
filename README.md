@@ -1,4 +1,4 @@
-# Football Player Detection and Tracking
+# Project Zizou - Football Player Detection and Tracking
 
 Un sistema de detección y seguimiento de jugadores en tiempo real para vídeos de fútbol basado en YOLOv11 y BoT-SORT.
 
@@ -25,8 +25,8 @@ Este proyecto implementa un sistema avanzado de visión por computadora para det
 
 ```bash
 # Clonar el repositorio
-git clone https://github.com/pablobv2/DeepFootball
-cd DeepFootball
+git clone https://github.com/pablobv2/Project-Zizou/
+cd Project-Zizou
 
 # Crear y activar entorno virtual (opcional pero recomendado)
 python -m venv venv
@@ -109,6 +109,7 @@ Este proyecto está bajo la licencia MIT - ver el archivo LICENSE para más deta
 - Ultralytics por el framework YOLO
 - BoT-SORT por el algoritmo de seguimiento
 - Roboflow por las herramientas de gestión de datasets
+- [Pablo Caño Pascual](https://github.com/pablocpas) por sus contribuciones 
 
 ## 📧 Contacto
 
@@ -116,4 +117,4 @@ Si tienes preguntas o sugerencias, no dudes en abrir un issue o contactarme en:
 
 - Pablo Barrio Val
 - 📫 Email: pablo.barrio.val@gmail.com
-- 🔗 LinkedIn: Pablo Barrio Val
+- 🔗 [LinkedIn](https://www.linkedin.com/in/pablo-barrio-val)
