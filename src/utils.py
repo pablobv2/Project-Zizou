@@ -1,3 +1,5 @@
+# src/utils.py
+
 import cv2
 
 def draw_boxes(frame, boxes, confidences, class_ids, class_names):

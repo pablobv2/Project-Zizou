@@ -1,3 +1,5 @@
+# src/detection.py
+
 import cv2
 import numpy as np
 
@@ -111,8 +113,8 @@ def track_objects_on_frame(frame, model, conf_threshold=0.5, classes_to_track=No
             
             # Calcular dimensiones para la elipse basadas en el ancho del bbox
             width = x2 - x1
-            ellipse_width = int(width * 0.5)
-            ellipse_height = int(width * 0.15)
+            ellipse_width = 15
+            ellipse_height = 5
             light_blue = (200, 200, 255)
             
             # Dibujar la elipse en la posición predicha
@@ -138,8 +140,8 @@ def track_objects_on_frame(frame, model, conf_threshold=0.5, classes_to_track=No
             if info["missed"] <= history_len:
                 x1, y1, x2, y2 = info["bbox"]
                 width = x2 - x1
-                ellipse_width = int(width * 0.5)
-                ellipse_height = int(width * 0.15)
+                ellipse_width = 15
+                ellipse_height = 5
                 light_blue = (200, 200, 255)
                 cv2.ellipse(
                     processed_frame,

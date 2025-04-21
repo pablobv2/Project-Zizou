@@ -1,3 +1,5 @@
+# src/video_processor.py
+
 import cv2
 import os
 from ultralytics import YOLO

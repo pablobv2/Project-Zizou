@@ -1,3 +1,5 @@
+# main.py
+
 import argparse
 import os
 from src.video_processor import process_video
