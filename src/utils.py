@@ -1,10 +1,18 @@
+# src/utils.py
+
 import cv2
 
 def draw_boxes(frame, boxes, confidences, class_ids, class_names):
     """
     Dibuja bounding boxes y etiquetas en un frame.
-    (Esta lógica ahora está dentro de detect_objects_on_frame,
-     pero podrías separarla aquí si se vuelve más compleja)
+    Args:
+        frame (numpy.ndarray): El frame de vídeo en el que dibujar.
+        boxes (list): Lista de bounding boxes.
+        confidences (list): Lista de confianzas para cada box.
+        class_ids (list): Lista de IDs de clase para cada box.
+        class_names (list): Lista de nombres de clases.
+    Returns:
+        numpy.ndarray: El frame procesado con las detecciones dibujadas.    
     """
     processed_frame = frame.copy()
     for box, conf, cls_id in zip(boxes, confidences, class_ids):

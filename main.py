@@ -1,3 +1,5 @@
+# main.py
+
 import argparse
 import os
 from src.video_processor import process_video
@@ -35,6 +37,12 @@ if __name__ == "__main__":
         default=None, # Por defecto, sigue todas las clases
         help="IDs de las clases a seguir (ej: 0 para 'person' si es la clase 0). Si no se especifica, sigue todas las clases detectadas."
     )
+    parser.add_argument(
+        "--history",
+        type=int,
+        default=10, # Valor por defecto para la longitud del historial
+        help="Number of past frames to consider for class stabilization (default: 10)."
+    )
 
     args = parser.parse_args()
 
@@ -50,7 +58,8 @@ if __name__ == "__main__":
     process_video(
         input_video_path=args.input,
         output_video_path=args.output,
-        model_path=args.model,
+        model_path=args.model, # Usar la variable correcta
         conf_threshold=args.conf,
-        classes_to_track=args.classes # Pasar la lista de clases (o None)
+        classes_to_track=args.classes,
+        history_len=args.history # Pasar el nuevo argumento
     )
