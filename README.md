@@ -46,7 +46,7 @@ mkdir -p models
 python src/download_model.py
 ```
 
-O descarga manualmente el modelo desde este enlace y colócalo en la carpeta `models/`.
+O descarga manualmente el modelo desde [Hugging Face](https://huggingface.co/pablobv2/Project-Zizou) y colócalo en la carpeta `models/`.
 
 ## 💻 Uso
 
