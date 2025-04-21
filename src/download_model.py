@@ -2,7 +2,7 @@ import shutil
 import os
 from huggingface_hub import hf_hub_download
 
-repo_id = "pablobv2/DeepFootball"
+repo_id = "pablobv2/Project-Zizou"
 filename = "trained_model.pt"
 local_dir = "./models"
 
