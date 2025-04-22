@@ -6,6 +6,15 @@ Un sistema de detección y seguimiento de jugadores en tiempo real para vídeos 
 
 Este proyecto implementa un sistema avanzado de visión por computadora para detectar y realizar seguimiento de jugadores, porteros y árbitros en vídeos de partidos de fútbol. Utiliza un modelo YOLOv11 personalizado, entrenado específicamente para el dominio del fútbol, junto con algoritmos de seguimiento de objetos y filtros de Kalman para proporcionar detecciones estables.
 
+## 📸 Ejemplo de resultado
+
+A continuación, se muestra un frame procesado por el sistema, donde se destacan jugadores y árbitros con bounding boxes y seguimiento:
+
+<p align="center">
+  <img src="assets/ejemplo_resultado.png" alt="Ejemplo detección" width="600"/>
+</p>
+
+
 ### Características principales:
 
 - **Detección especializada**: Modelo YOLOv11 fine-tuned para identificar jugadores, porteros, árbitros y balones
