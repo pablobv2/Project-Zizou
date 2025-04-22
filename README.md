@@ -11,7 +11,7 @@ Este proyecto implementa un sistema avanzado de visión por computadora para det
 A continuación, se muestra un frame procesado por el sistema, donde se destacan jugadores y árbitros con bounding boxes y seguimiento:
 
 <p align="center">
-  <img src="assets/ejemplo_resultado.png" alt="Ejemplo detección" width="600"/>
+  <img src="assets/gif_ejemplo_resultado.gif" alt="Vista previa del sistema" width="600"/>
 </p>
 
 
