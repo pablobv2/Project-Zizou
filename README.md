@@ -8,7 +8,7 @@ Este proyecto implementa un sistema avanzado de visión por computadora para det
 
 ## 📸 Ejemplo de resultado
 
-A continuación, se muestra un frame procesado por el sistema, donde se destacan jugadores y árbitros con bounding boxes y seguimiento:
+A continuación, se muestra un ejemplo procesado por el sistema, donde se destacan jugadores y árbitros con bounding boxes y seguimiento:
 
 <p align="center">
   <img src="assets/gif_ejemplo_resultado.gif" alt="Vista previa del sistema" width="600"/>
